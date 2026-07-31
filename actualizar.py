@@ -8,9 +8,17 @@ from io import BytesIO
 URL_PDF = "https://www.ipaat.gov.ar/storage/notas/July2026/A9vKucc3vL49pGV3unK3.pdf"
 
 # Descargar PDF
-respuesta = requests.get(URL_PDF)
+respuesta = requests.get(
+    URL_PDF,
+    headers={
+        "User-Agent": "Mozilla/5.0"
+    }
+)
+
 respuesta.raise_for_status()
 
+print("Tipo de archivo:", respuesta.headers.get("Content-Type"))
+print("Primeros bytes:", respuesta.content[:20])
 texto = ""
 
 # Leer PDF
