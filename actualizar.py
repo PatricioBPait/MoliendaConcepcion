@@ -89,6 +89,7 @@ print(pdf)
 
 
 texto = leer_pdf(pdf)
+print(texto[:5000])
 
 
 datos = extraer_concepcion(texto)
