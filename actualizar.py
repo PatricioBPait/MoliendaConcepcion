@@ -20,6 +20,7 @@ def obtener_pdf():
     respuesta.raise_for_status()
 
     soup = BeautifulSoup(respuesta.text, "html.parser")
+    print(respuesta.text[:2000])
 
     enlaces = soup.find_all("a", href=True)
 
