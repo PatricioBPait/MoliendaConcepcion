@@ -58,22 +58,45 @@ def leer_pdf(url_pdf):
 
 def extraer_concepcion(texto):
 
-    patron = r"Concepción\s+(\d+)\s+(\d+)"
+    lineas = texto.splitlines()
 
-    resultado = re.search(
-        patron,
-        texto,
-        re.IGNORECASE
-    )
+    indice_concepcion = None
 
-    if resultado:
+    # Buscar encabezado
+    for linea in lineas:
+        columnas = linea.split()
 
-        return (
-            int(resultado.group(1)),
-            int(resultado.group(2))
-        )
+        if "Concepción" in columnas:
+            indice_concepcion = columnas.index("Concepción")
+            break
+
+    if indice_concepcion is None:
+        return None
+
+
+    # Buscar primera línea con fecha y números
+    for linea in lineas:
+
+        columnas = linea.split()
+
+        if len(columnas) > indice_concepcion:
+
+            if columnas[0].count("/") == 2:
+
+                try:
+                    molienda = int(
+                        columnas[indice_concepcion]
+                        .replace(".", "")
+                    )
+
+                    return molienda, 0
+
+                except:
+                    pass
 
     return None
+
+
 
 
 # --- PROGRAMA PRINCIPAL ---
