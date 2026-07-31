@@ -1,0 +1,38 @@
+name: Actualizar molienda Ingenio Concepcion
+
+on:
+  schedule:
+    - cron: "0 */2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Instalar librerias
+        run: |
+          pip install -r requirements.txt
+
+      - name: Ejecutar actualización
+        run: |
+          python actualizar.py
+
+      - name: Guardar cambios
+        run: |
+          git config --global user.name "Bot IPAAT"
+          git config --global user.email "bot@ipaatautomatizado.com"
+          git add data.json
+          git commit -m "Actualizacion automatica molienda" || exit 0
+          git push
