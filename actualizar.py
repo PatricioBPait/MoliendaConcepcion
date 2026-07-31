@@ -4,52 +4,130 @@ import re
 import json
 from datetime import datetime
 from io import BytesIO
+from bs4 import BeautifulSoup
 
-URL_PDF = "https://www.ipaat.gov.ar/storage/notas/July2026/A9vKucc3vL49pGV3unK3.pdf"
 
-# Descargar PDF
-respuesta = requests.get(
-    URL_PDF,
-    headers={
-        "User-Agent": "Mozilla/5.0"
-    }
-)
+PAGINA_IPAAT = "https://www.ipaat.gov.ar/nota/86/parte-diario-de-produccion"
 
-respuesta.raise_for_status()
 
-print("Tipo de archivo:", respuesta.headers.get("Content-Type"))
-print("Primeros bytes:", respuesta.content[:20])
-texto = ""
+def obtener_pdf():
 
-# Leer PDF
-with pdfplumber.open(BytesIO(respuesta.content)) as pdf:
-    for pagina in pdf.pages:
-        texto += pagina.extract_text() or ""
+    respuesta = requests.get(
+        PAGINA_IPAAT,
+        headers={"User-Agent": "Mozilla/5.0"}
+    )
 
-print(texto)
+    respuesta.raise_for_status()
 
-# Buscar Concepción
-patron = r"Concepción\s+(\d+)\s+(\d+)"
+    soup = BeautifulSoup(respuesta.text, "html.parser")
 
-resultado = re.search(patron, texto, re.IGNORECASE)
+    enlaces = soup.find_all("a", href=True)
 
-if resultado:
+    for enlace in enlaces:
+        url = enlace["href"]
 
-    molienda = int(resultado.group(1))
-    acumulada = int(resultado.group(2))
+        if ".pdf" in url.lower():
 
-    datos = {
-        "ingenio": "Concepción",
-        "fecha": datetime.now().strftime("%d/%m/%Y"),
-        "molienda_diaria": molienda,
-        "molienda_acumulada": acumulada,
-        "actualizado": datetime.now().strftime("%H:%M")
-    }
+            if url.startswith("/"):
+                url = "https://www.ipaat.gov.ar" + url
 
-    with open("data.json", "w", encoding="utf-8") as archivo:
-        json.dump(datos, archivo, indent=2, ensure_ascii=False)
+            return url
 
-    print("Actualizado:", datos)
+    return None
 
-else:
-    print("No se encontró Concepción")
+
+def leer_pdf(url_pdf):
+
+    respuesta = requests.get(
+        url_pdf,
+        headers={"User-Agent": "Mozilla/5.0"}
+    )
+
+    respuesta.raise_for_status()
+
+    texto = ""
+
+    with pdfplumber.open(BytesIO(respuesta.content)) as pdf:
+
+        for pagina in pdf.pages:
+            texto += pagina.extract_text() or ""
+
+    return texto
+
+
+def extraer_concepcion(texto):
+
+    patron = r"Concepción\s+(\d+)\s+(\d+)"
+
+    resultado = re.search(
+        patron,
+        texto,
+        re.IGNORECASE
+    )
+
+    if resultado:
+
+        return (
+            int(resultado.group(1)),
+            int(resultado.group(2))
+        )
+
+    return None
+
+
+# --- PROGRAMA PRINCIPAL ---
+
+pdf = obtener_pdf()
+
+if not pdf:
+    raise Exception("No se encontró PDF del IPAAT")
+
+
+print("PDF encontrado:")
+print(pdf)
+
+
+texto = leer_pdf(pdf)
+
+
+datos = extraer_concepcion(texto)
+
+
+if not datos:
+    raise Exception("No se encontró Ingenio Concepción")
+
+
+molienda, acumulada = datos
+
+
+salida = {
+
+    "ingenio": "Concepción",
+
+    "fecha": datetime.now().strftime("%d/%m/%Y"),
+
+    "molienda_diaria": molienda,
+
+    "molienda_acumulada": acumulada,
+
+    "actualizado": datetime.now().strftime("%H:%M")
+
+}
+
+
+with open(
+    "data.json",
+    "w",
+    encoding="utf-8"
+) as archivo:
+
+    json.dump(
+        salida,
+        archivo,
+        indent=2,
+        ensure_ascii=False
+    )
+
+
+print("Actualizado correctamente")
+print(salida)
