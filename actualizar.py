@@ -539,7 +539,7 @@ def extraer_acumulado(texto):
         # Concepción = índice 3
 
         acumulado = numero(
-            columnas[3]
+            columnas[4]
         )
 
         if acumulado is not None:
