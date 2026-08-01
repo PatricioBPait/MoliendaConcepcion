@@ -1,4 +1,4 @@
-```python
+
 import requests
 import pdfplumber
 import re
@@ -254,4 +254,3 @@ print("Molienda diaria:", salida["molienda_diaria"])
 print("Molienda acumulada:", salida["molienda_acumulada"])
 print("Hora actualización:", salida["actualizado"])
 print("===================================")
-```
