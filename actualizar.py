@@ -25,15 +25,27 @@ def descargar_pdf():
 
     print("Descargando PDF del IPAAT...")
     print(URL_PDF)
+respuesta = requests.get(
+    URL_PDF,
+    headers={
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/pdf,*/*",
+        "Referer": "https://www.ipaat.gov.ar/"
+    },
+    timeout=60,
+    allow_redirects=True
+)
 
-    respuesta = requests.get(
-        URL_PDF,
-        headers={
-            "User-Agent": "Mozilla/5.0"
-        },
-        timeout=60
-    )
+respuesta.raise_for_status()
 
+print("URL final:", respuesta.url)
+print("Content-Type:", respuesta.headers.get("Content-Type"))
+print("Tamaño:", len(respuesta.content))
+
+if not respuesta.content.startswith(b"%PDF"):
+    print("Contenido recibido no comienza con %PDF")
+    print(respuesta.content[:200])
+    raise Exception("IPAAT no devolvió un PDF válido")    
     respuesta.raise_for_status()
 
     print("PDF descargado correctamente.")
