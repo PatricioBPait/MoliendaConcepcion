@@ -1,85 +1,29 @@
 
-async function cargarDatos() {
-  try {
+fetch("data.json")
+  .then(function(response) {
+    return response.json();
+  })
+  .then(function(data) {
 
-    // Evita que el navegador use un data.json viejo
-    const respuesta = await fetch(
-      "data.json?t=" + Date.now(),
-      {
-        cache: "no-store"
-      }
-    );
+    document.getElementById("molienda").innerHTML =
+      Number(data.molienda_diaria).toLocaleString("es-AR") + " t";
 
-    if (!respuesta.ok) {
-      throw new Error(
-        "No se pudo cargar data.json"
-      );
-    }
+    document.getElementById("acumulado").innerHTML =
+      Number(data.molienda_acumulada).toLocaleString("es-AR") + " t";
 
-    const datos = await respuesta.json();
+    document.getElementById("fecha").innerHTML =
+      data.fecha;
 
-    console.log("Datos recibidos:", datos);
+    document.getElementById("actualizado").innerHTML =
+      data.actualizado;
 
-    // --------------------------------------------------
-    // Molienda diaria
-    // --------------------------------------------------
+  })
+  .catch(function(error) {
 
-    document.getElementById("molienda").textContent =
-      Number(datos.molienda_diaria).toLocaleString(
-        "es-AR"
-      ) + " t";
+    console.error(error);
 
-    // --------------------------------------------------
-    // Acumulado
-    // --------------------------------------------------
+    document.getElementById("molienda").innerHTML =
+      "ERROR";
 
-    document.getElementById("acumulado").textContent =
-      Number(datos.molienda_acumulada).toLocaleString(
-        "es-AR"
-      ) + " t";
+  });
 
-    // --------------------------------------------------
-    // Fecha
-    // --------------------------------------------------
-
-    document.getElementById("fecha").textContent =
-      datos.fecha || "-";
-
-    // --------------------------------------------------
-    // Actualizado
-    // --------------------------------------------------
-
-    document.getElementById("actualizado").textContent =
-      datos.actualizado || "-";
-
-  } catch (error) {
-
-    console.error(
-      "Error cargando datos:",
-      error
-    );
-
-    document.getElementById("molienda").textContent =
-      "Error";
-
-    document.getElementById("acumulado").textContent =
-      "-";
-
-    document.getElementById("fecha").textContent =
-      "-";
-
-    document.getElementById("actualizado").textContent =
-      "-";
-  }
-}
-
-
-// Cargar al abrir la página
-cargarDatos();
-
-
-// Volver a comprobar cada 5 minutos
-setInterval(
-  cargarDatos,
-  5 * 60 * 1000
-);
