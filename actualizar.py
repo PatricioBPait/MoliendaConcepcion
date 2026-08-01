@@ -316,7 +316,6 @@ def numero(valor):
 # ============================================================
 # EXTRAER TABLA CAÑA MOLIDA BRUTA
 # ============================================================
-
 def extraer_cania_molida(texto):
 
     lineas = texto.splitlines()
@@ -326,12 +325,9 @@ def extraer_cania_molida(texto):
     print(" BUSCANDO CAÑA MOLIDA BRUTA")
     print("==========================================")
 
-    # --------------------------------------------------------
-    # Encontrar el encabezado correcto
-    # --------------------------------------------------------
-
     inicio_tabla = None
 
+    # Buscar específicamente el encabezado de la tabla
     for i, linea in enumerate(lineas):
 
         if (
@@ -347,10 +343,7 @@ def extraer_cania_molida(texto):
                 ]
             )
 
-            if (
-                "Caña molida bruta"
-                in bloque
-            ):
+            if "Caña molida bruta" in bloque:
 
                 inicio_tabla = i
 
@@ -369,74 +362,77 @@ def extraer_cania_molida(texto):
             "'Caña molida bruta (t)'"
         )
 
-    # --------------------------------------------------------
-    # Leer las filas posteriores
-    # --------------------------------------------------------
-
     registros = []
 
     patron_fecha = re.compile(
         r"^(\d{2}/\d{2}/\d{4})\s+"
     )
 
-    for linea in lineas[
-        inicio_tabla:
-    ]:
+    # IMPORTANTE:
+    # Solo leer la primera tabla.
+    # Cuando terminan las filas con fechas,
+    # salimos del bloque.
+
+    comenzo_tabla = False
+
+    for linea in lineas[inicio_tabla:]:
 
         linea = linea.strip()
 
-        coincidencia = (
-            patron_fecha.match(linea)
-        )
+        coincidencia = patron_fecha.match(linea)
 
-        if not coincidencia:
-            continue
+        if coincidencia:
 
-        columnas = linea.split()
+            comenzo_tabla = True
 
-        if len(columnas) < 4:
-            continue
+            columnas = linea.split()
 
-        fecha = columnas[0]
+            if len(columnas) < 4:
+                continue
 
-        # ----------------------------------------------------
-        # Estructura:
-        #
-        # Fecha
-        # Aguilares
-        # Bella Vista
-        # Concepción
-        # Cruz Alta
-        #
-        # Concepción = índice 3
-        # ----------------------------------------------------
+            fecha = columnas[0]
 
-        molienda = numero(
-            columnas[3]
-        )
+            # Fecha
+            # Aguilares
+            # Bella Vista
+            # Concepción
+            # Cruz Alta
+            #
+            # Concepción = índice 3
 
-        if molienda is None:
+            molienda = numero(
+                columnas[3]
+            )
+
+            if molienda is None:
+
+                print(
+                    fecha,
+                    "-> Concepción sin dato"
+                )
+
+                continue
 
             print(
                 fecha,
-                "-> Concepción sin dato"
+                "-> Concepción:",
+                molienda,
+                "t"
             )
 
-            continue
+            registros.append(
+                {
+                    "fecha": fecha,
+                    "molienda": molienda
+                }
+            )
 
-        print(
-            fecha,
-            "-> Concepción:",
-            molienda,
-            "t"
-        )
+        else:
 
-        registros.append(
-            {
-                "fecha": fecha,
-                "molienda": molienda
-            }
-        )
+            # Si ya empezamos a leer fechas y aparece
+            # una línea que no es fecha, terminó esta tabla.
+            if comenzo_tabla:
+                break
 
     if not registros:
 
@@ -444,10 +440,6 @@ def extraer_cania_molida(texto):
             "No se encontraron datos "
             "válidos de Concepción"
         )
-
-    # --------------------------------------------------------
-    # Ordenar por fecha
-    # --------------------------------------------------------
 
     registros.sort(
         key=lambda x:
@@ -473,7 +465,6 @@ def extraer_cania_molida(texto):
 
     return ultimo
 
-
 # ============================================================
 # EXTRAER TOTAL ZAFRA
 # ============================================================
@@ -487,7 +478,41 @@ def extraer_acumulado(texto):
 
     lineas = texto.splitlines()
 
-    for linea in lineas:
+    # Buscar el encabezado de Caña molida bruta
+    inicio_tabla = None
+
+    for i, linea in enumerate(lineas):
+
+        if (
+            "Fecha" in linea
+            and "Concepción" in linea
+            and "Cruz Alta" in linea
+        ):
+
+            bloque = "\n".join(
+                lineas[
+                    max(0, i - 10):
+                    i + 5
+                ]
+            )
+
+            if "Caña molida bruta" in bloque:
+
+                inicio_tabla = i
+
+                break
+
+    if inicio_tabla is None:
+
+        raise Exception(
+            "No se encontró la tabla "
+            "de Caña molida bruta"
+        )
+
+    # Buscar TOTAL ZAFRA dentro de esta tabla
+    # y tomar solamente el primero.
+
+    for linea in lineas[inicio_tabla:]:
 
         linea = linea.strip()
 
@@ -499,7 +524,7 @@ def extraer_acumulado(texto):
         columnas = linea.split()
 
         print(
-            "Fila encontrada:",
+            "Fila Total zafra encontrada:",
             linea
         )
 
@@ -510,6 +535,8 @@ def extraer_acumulado(texto):
         # Aguilares
         # Bella Vista
         # Concepción
+        #
+        # Concepción = índice 3
 
         acumulado = numero(
             columnas[3]
@@ -518,7 +545,7 @@ def extraer_acumulado(texto):
         if acumulado is not None:
 
             print(
-                "Acumulado Concepción:",
+                ">>> ACUMULADO CONCEPCIÓN:",
                 acumulado,
                 "t"
             )
@@ -529,8 +556,6 @@ def extraer_acumulado(texto):
         "No se encontró el acumulado "
         "de zafra de Concepción"
     )
-
-
 # ============================================================
 # GUARDAR DATA.JSON
 # ============================================================
