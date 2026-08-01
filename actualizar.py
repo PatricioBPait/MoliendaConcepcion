@@ -5,68 +5,91 @@ import re
 import json
 from datetime import datetime
 from io import BytesIO
-from bs4 import BeautifulSoup
 
 
-PAGINA_IPAAT = "https://www.ipaat.gov.ar/nota/86/parte-diario-de-produccion"
+# ============================================================
+# PDF DEL IPAAT
+# ============================================================
+
+URL_PDF = (
+    "https://www.ipaat.gov.ar/storage/notas/July2026/"
+    "Eq2hviytlfh0CSduXaIO.pdf"
+)
 
 
-def obtener_pdf():
+# ============================================================
+# DESCARGAR PDF
+# ============================================================
+
+def descargar_pdf():
+
+    print("Descargando PDF del IPAAT...")
+    print(URL_PDF)
+
     respuesta = requests.get(
-        PAGINA_IPAAT,
-        headers={"User-Agent": "Mozilla/5.0"},
-        timeout=30
+        URL_PDF,
+        headers={
+            "User-Agent": "Mozilla/5.0"
+        },
+        timeout=60
     )
 
     respuesta.raise_for_status()
 
-    soup = BeautifulSoup(respuesta.text, "html.parser")
+    print("PDF descargado correctamente.")
+    print("Tamaño:", len(respuesta.content), "bytes")
 
-    enlaces = soup.find_all("a", href=True)
-
-    for enlace in enlaces:
-        url = enlace["href"]
-
-        if ".pdf" in url.lower():
-
-            if url.startswith("/"):
-                url = "https://www.ipaat.gov.ar" + url
-
-            return url
-
-    return None
+    return respuesta.content
 
 
-def leer_pdf(url_pdf):
-    respuesta = requests.get(
-        url_pdf,
-        headers={"User-Agent": "Mozilla/5.0"},
-        timeout=30
-    )
+# ============================================================
+# EXTRAER TEXTO DEL PDF
+# ============================================================
 
-    respuesta.raise_for_status()
+def extraer_texto(pdf_bytes):
 
     texto = ""
 
-    with pdfplumber.open(BytesIO(respuesta.content)) as pdf:
-        for pagina in pdf.pages:
-            texto += (pagina.extract_text() or "") + "\n"
+    with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
+
+        print("Cantidad de páginas:", len(pdf.pages))
+
+        for numero_pagina, pagina in enumerate(pdf.pages, start=1):
+
+            contenido = pagina.extract_text() or ""
+
+            print(
+                "Página",
+                numero_pagina,
+                "- caracteres:",
+                len(contenido)
+            )
+
+            texto += contenido + "\n"
 
     return texto
 
 
-def numero(valor):
-    """
-    Convierte valores como:
-    19.112 -> 19112
-    859.628 -> 859628
-    """
-    valor = valor.strip()
+# ============================================================
+# CONVERTIR NÚMEROS
+# ============================================================
 
-    if valor in ("-", ""):
+def convertir_numero(valor):
+
+    if valor is None:
         return None
 
-    valor = valor.replace(".", "").replace(",", ".")
+    valor = valor.strip()
+
+    if valor in ("", "-"):
+        return None
+
+    # Ejemplo:
+    # 19.112 -> 19112
+    # 859.628 -> 859628
+
+    valor = valor.replace(".", "")
+    valor = valor.replace(",", ".")
 
     try:
         return int(float(valor))
@@ -74,54 +97,43 @@ def numero(valor):
         return None
 
 
-def extraer_concepcion(texto):
+# ============================================================
+# EXTRAER DATOS DE CONCEPCIÓN
+# ============================================================
+
+def buscar_datos_concepcion(texto):
 
     lineas = texto.splitlines()
 
-    # ---------------------------------------------------------
-    # 1. Encontrar el encabezado de CAÑA MOLIDA BRUTA
-    # ---------------------------------------------------------
-
-    indice_encabezado = None
-
-    for i, linea in enumerate(lineas):
-
-        if "Fecha" in linea and "Concepción" in linea and "Cruz Alta" in linea:
-
-            # Nos interesa el bloque que corresponde a
-            # "Caña molida bruta (t)"
-            bloque = "\n".join(lineas[max(0, i - 5):i + 3])
-
-            if "Caña molida bruta" in bloque:
-                indice_encabezado = i
-                break
-
-    if indice_encabezado is None:
-        raise Exception(
-            "No se encontró la tabla de Caña molida bruta"
-        )
-
-    print("Encabezado encontrado en línea:", indice_encabezado)
-
-    # ---------------------------------------------------------
-    # 2. Buscar todas las filas con fecha
-    # ---------------------------------------------------------
+    print("")
+    print("Buscando datos de Concepción...")
+    print("")
 
     registros = []
 
-    patron_fecha = re.compile(r"^\d{2}/\d{2}/\d{4}$")
+    # --------------------------------------------------------
+    # Buscar filas de fechas
+    # --------------------------------------------------------
+
+    patron_fecha = re.compile(
+        r"^(\d{2}/\d{2}/\d{4})\s+"
+    )
 
     for linea in lineas:
 
+        linea = linea.strip()
+
+        coincidencia = patron_fecha.match(linea)
+
+        if not coincidencia:
+            continue
+
         columnas = linea.split()
 
-        if not columnas:
-            continue
+        print("Fila encontrada:", linea)
 
-        if not patron_fecha.match(columnas[0]):
-            continue
-
-        # En esta tabla:
+        # ----------------------------------------------------
+        # La tabla es:
         #
         # Fecha
         # Aguilares
@@ -129,128 +141,221 @@ def extraer_concepcion(texto):
         # Concepción
         # Cruz Alta
         #
-        # Por lo tanto Concepción = índice 3
-        if len(columnas) <= 3:
+        # Concepción = columna 4
+        # índice Python = 3
+        # ----------------------------------------------------
+
+        if len(columnas) < 4:
             continue
 
         fecha = columnas[0]
 
-        valor_concepcion = numero(columnas[3])
-
-        if valor_concepcion is not None:
-            registros.append(
-                {
-                    "fecha": fecha,
-                    "molienda": valor_concepcion
-                }
-            )
-
-    if not registros:
-        raise Exception(
-            "No se encontraron datos de molienda para Concepción"
+        molienda_concepcion = convertir_numero(
+            columnas[3]
         )
 
-    # ---------------------------------------------------------
-    # 3. Tomar el último día que tenga un valor válido
-    # ---------------------------------------------------------
+        if molienda_concepcion is None:
+
+            print(
+                "  Concepción sin dato para",
+                fecha
+            )
+
+            continue
+
+        print(
+            "  >>> CONCEPCIÓN:",
+            molienda_concepcion,
+            "t"
+        )
+
+        registros.append(
+            {
+                "fecha": fecha,
+                "molienda": molienda_concepcion
+            }
+        )
+
+    if not registros:
+
+        raise Exception(
+            "No se encontraron datos de molienda de Concepción"
+        )
+
+    # --------------------------------------------------------
+    # Ordenar por fecha
+    # --------------------------------------------------------
+
+    registros.sort(
+        key=lambda x: datetime.strptime(
+            x["fecha"],
+            "%d/%m/%Y"
+        )
+    )
 
     ultimo = registros[-1]
 
-    fecha_ultimo = ultimo["fecha"]
-    molienda = ultimo["molienda"]
+    print("")
+    print("Último dato encontrado:")
+    print("Fecha:", ultimo["fecha"])
+    print("Molienda:", ultimo["molienda"], "t")
 
-    print("Última fecha con datos:", fecha_ultimo)
-    print("Molienda Concepción:", molienda)
+    return ultimo
 
-    # ---------------------------------------------------------
-    # 4. Buscar TOTAL ZAFRA
-    # ---------------------------------------------------------
 
-    acumulada = None
+# ============================================================
+# BUSCAR ACUMULADO DE CONCEPCIÓN
+# ============================================================
 
-    for i, linea in enumerate(lineas):
+def buscar_acumulado(texto):
 
-        if linea.startswith("Total zafra"):
+    print("")
+    print("Buscando acumulado de zafra...")
 
-            columnas = linea.split()
+    lineas = texto.splitlines()
 
+    for linea in lineas:
+
+        linea_limpia = linea.strip()
+
+        if linea_limpia.lower().startswith(
+            "total zafra"
+        ):
+
+            columnas = linea_limpia.split()
+
+            print(
+                "Fila Total zafra encontrada:",
+                linea_limpia
+            )
+
+            # ------------------------------------------------
+            # La estructura esperada es:
+            #
             # Total zafra
             # Aguilares
             # Bella Vista
             # Concepción
+            # Cruz Alta
             #
-            # Índice 3 = Concepción
+            # Concepción = índice 3
+            # ------------------------------------------------
 
-            if len(columnas) > 3:
+            if len(columnas) >= 4:
 
-                acumulada = numero(columnas[3])
+                acumulado = convertir_numero(
+                    columnas[3]
+                )
 
-                if acumulada is not None:
-                    break
+                if acumulado is not None:
 
-    if acumulada is None:
-        raise Exception(
-            "No se encontró el acumulado de zafra de Concepción"
-        )
+                    print(
+                        ">>> ACUMULADO CONCEPCIÓN:",
+                        acumulado,
+                        "t"
+                    )
 
-    print("Acumulado Concepción:", acumulada)
+                    return acumulado
 
-    return {
-        "fecha": fecha_ultimo,
-        "molienda": molienda,
-        "acumulada": acumulada
-    }
-
-
-# -------------------------------------------------------------
-# PROGRAMA PRINCIPAL
-# -------------------------------------------------------------
-
-pdf = obtener_pdf()
-
-if not pdf:
-    raise Exception("No se encontró PDF del IPAAT")
-
-print("PDF encontrado:")
-print(pdf)
-
-
-texto = leer_pdf(pdf)
-
-
-datos = extraer_concepcion(texto)
-
-
-salida = {
-    "ingenio": "Concepción",
-    "fecha": datos["fecha"],
-    "molienda_diaria": datos["molienda"],
-    "molienda_acumulada": datos["acumulada"],
-    "actualizado": datetime.now().strftime("%H:%M")
-}
-
-
-with open(
-    "data.json",
-    "w",
-    encoding="utf-8"
-) as archivo:
-
-    json.dump(
-        salida,
-        archivo,
-        indent=2,
-        ensure_ascii=False
+    raise Exception(
+        "No se encontró el acumulado de zafra de Concepción"
     )
 
 
+# ============================================================
+# PROGRAMA PRINCIPAL
+# ============================================================
+
 print("")
-print("===================================")
-print(" ACTUALIZADO CORRECTAMENTE")
-print("===================================")
-print("Ingenio:", salida["ingenio"])
-print("Fecha:", salida["fecha"])
-print("Molienda diaria:", salida["molienda_diaria"])
-print("Molienda acumulada:", salida["molienda_acumulada"])
-print("Hora actualización:", salida["actualizado"])
-print("===================================")
+print("==========================================")
+print(" ACTUALIZACIÓN MOLIENDA CONCEPCIÓN")
+print("==========================================")
+print("")
+
+try:
+
+    # Descargar PDF
+    pdf_bytes = descargar_pdf()
+
+    # Leer PDF
+    texto = extraer_texto(pdf_bytes)
+
+    # Buscar molienda diaria
+    ultimo = buscar_datos_concepcion(texto)
+
+    # Buscar acumulado
+    acumulado = buscar_acumulado(texto)
+
+    # --------------------------------------------------------
+    # Crear data.json
+    # --------------------------------------------------------
+
+    datos = {
+
+        "ingenio": "Concepción",
+
+        "fecha": ultimo["fecha"],
+
+        "molienda_diaria": ultimo["molienda"],
+
+        "molienda_acumulada": acumulado,
+
+        "actualizado": datetime.now().strftime(
+            "%d/%m/%Y %H:%M"
+        )
+    }
+
+    print("")
+    print("==========================================")
+    print(" DATOS FINALES")
+    print("==========================================")
+    print("Ingenio:", datos["ingenio"])
+    print("Fecha:", datos["fecha"])
+    print(
+        "Molienda diaria:",
+        datos["molienda_diaria"],
+        "t"
+    )
+    print(
+        "Molienda acumulada:",
+        datos["molienda_acumulada"],
+        "t"
+    )
+    print(
+        "Actualizado:",
+        datos["actualizado"]
+    )
+    print("==========================================")
+
+    # --------------------------------------------------------
+    # Guardar JSON
+    # --------------------------------------------------------
+
+    with open(
+        "data.json",
+        "w",
+        encoding="utf-8"
+    ) as archivo:
+
+        json.dump(
+            datos,
+            archivo,
+            indent=2,
+            ensure_ascii=False
+        )
+
+    print("")
+    print("data.json actualizado correctamente.")
+    print("")
+
+except Exception as error:
+
+    print("")
+    print("==========================================")
+    print(" ERROR")
+    print("==========================================")
+    print(str(error))
+    print("==========================================")
+    print("")
+
+    raise
